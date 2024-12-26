@@ -1,5 +1,56 @@
-const hand = new Hand();
 const MAKE_WEBHOOK_URL = "https://hook.eu2.make.com/wy955rlqwqpnj39e5nib8bo0hixquwoa"; 
+
+let audioContext;
+let analyser;
+let dataArray;
+
+// Function to initialize WebRTC and audio processing
+async function initWebRTC() {
+    const peerConnection = new RTCPeerConnection();
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+    // Create an audio context and analyser
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    // Start monitoring voice activity
+    monitorVoiceActivity();
+}
+
+// Function to monitor voice activity
+function monitorVoiceActivity() {
+    const voiceIndicator = document.getElementById('voiceIndicator');
+
+    function checkVoiceActivity() {
+        analyser.getByteFrequencyData(dataArray); // Get frequency data
+
+        // Calculate the average volume
+        const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+
+        // Update the voice indicator based on the average volume
+        if (average > 50) { // Adjust threshold as needed
+            voiceIndicator.style.backgroundColor = 'green'; // Active
+        } else {
+            voiceIndicator.style.backgroundColor = 'gray'; // Inactive
+        }
+
+        requestAnimationFrame(checkVoiceActivity); // Continue checking
+    }
+
+    checkVoiceActivity(); // Start the loop
+}
+
+// Call initWebRTC when the document is ready
+document.addEventListener('DOMContentLoaded', () => {
+    initWebRTC(); // Initialize WebRTC and audio processing
+});
 
 async function sendToWebhook(payload) {
     console.log("Sending data to webhook:", JSON.stringify(payload, null, 2)); // Log the data being sent
@@ -30,45 +81,6 @@ async function sendToWebhook(payload) {
     }
 }
 
-function talkToTheHand() {
-	hand
-		.connect()
-		.then(() => console.log('Hand is ready'))
-		.catch((err) => console.error(err));
-}
-
-const fns = {
-	getPageHTML: () => {
-		return { success: true, html: document.documentElement.outerHTML };
-	},
-	changeBackgroundColor: ({ color }) => {
-		document.body.style.backgroundColor = color;
-		return { success: true, color };
-	},
-	changeTextColor: ({ color }) => {
-		document.body.style.color = color;
-		return { success: true, color };
-	},
-	showFingers: async ({ numberOfFingers }) => {
-		await hand.sendCommand(numberOfFingers);
-		return { success: true, numberOfFingers };
-	},
-	find_something: async ({ object, room_number }) => {
-		console.log('Looking for something...');
-       
-        const webhookResponse = await sendToWebhook({
-          route: "5",  
-          data1: 'find_something',
-          data2: JSON.stringify({object:object, room_number:room_number}),
-          sessionID: 'sessionId'
-        });
-
-        // Parse the webhook response
-        //const parsedResponse = JSON.parse(webhookResponse);
-
-        return webhookResponse;
-	},
-};
 
 // Create a WebRTC Agent
 const peerConnection = new RTCPeerConnection();
@@ -89,7 +101,6 @@ function configureData() {
 		type: 'session.update',
 		session: {
 			modalities: ['text', 'audio'],
-			// Provide the tools. Note they match the keys in the `fns` object above
 			tools: [
 				{
 					type: "function",
@@ -110,44 +121,6 @@ function configureData() {
 					  additionalProperties: false,
 					  required: ["object", "room_number"]
 					}
-				},
-				{
-					type: 'function',
-					name: 'changeBackgroundColor',
-					description: 'Changes the background color of a web page',
-					parameters: {
-						type: 'object',
-						properties: {
-							color: { type: 'string', description: 'A hex value of the color' },
-						},
-					},
-				},
-				{
-					type: 'function',
-					name: 'changeTextColor',
-					description: 'Changes the text color of a web page',
-					parameters: {
-						type: 'object',
-						properties: {
-							color: { type: 'string', description: 'A hex value of the color' },
-						},
-					},
-				},
-				{
-					type: 'function',
-					name: 'showFingers',
-					description: 'Controls a robot hand to show a specific number of fingers',
-					parameters: {
-						type: 'object',
-						properties: {
-							numberOfFingers: { type: 'string', description: 'Values 1 through 5 of the number of fingers to hold up' },
-						},
-					},
-				},
-				{
-					type: 'function',
-					name: 'getPageHTML',
-					description: 'Gets the HTML for the current page',
 				},
 			],
 		},
@@ -175,56 +148,59 @@ dataChannel.addEventListener('message', async (ev) => {
 	const msg = JSON.parse(ev.data);
 	// Handle function calls
 	if (msg.type === 'response.function_call_arguments.done') {
-		const fn = fns[msg.name];
-		if (fn !== undefined) {
-			console.log(`Calling local function ${msg.name} with ${msg.arguments}`);
-			const args = JSON.parse(msg.arguments);
-			const webhookResponse = await fn(args);
+		console.log(`Calling function ${msg.name} with ${msg.arguments}`);
+		const args = JSON.parse(msg.arguments);
 
-			console.log(webhookResponse);
-			// Parse the webhook response
-			const parsedResponse = JSON.parse(webhookResponse);
+		const webhookResponse = await sendToWebhook({
+			route: "5",  
+			data1: msg.name,
+			data2: JSON.stringify(args),
+			sessionID: 'sessionId'
+			});
 
-			
+		console.log(webhookResponse);
+		// Parse the webhook response
+		const parsedResponse = JSON.parse(webhookResponse);
 
-			const functionReturn = {
-				type: "conversation.item.create",
-				item: {
-					call_id: msg.call_id,
-					type: "function_call_output",
-					role: "system",
-					output: JSON.stringify(parsedResponse.values),  
-				}
-			};
+		
 
-			const messageResponse = {
-				type: "conversation.item.create",
-				item: {
-					type: "message",
-					role: "user",
-					content: [
-						{
-							type: "input_text",
-							text: JSON.stringify(parsedResponse.instructions),
-						},
-					],
-				},
-			};
+		const functionReturn = {
+			type: "conversation.item.create",
+			item: {
+				call_id: msg.call_id,
+				type: "function_call_output",
+				role: "system",
+				output: JSON.stringify(parsedResponse.values),  
+			}
+		};
 
-			console.log("functionReturn")
-			console.log(JSON.stringify(functionReturn))
+		const messageResponse = {
+			type: "conversation.item.create",
+			item: {
+				type: "message",
+				role: "user",
+				content: [
+					{
+						type: "input_text",
+						text: JSON.stringify(parsedResponse.instructions),
+					},
+				],
+			},
+		};
 
-			console.log("messageResponse")
-			console.log(JSON.stringify(messageResponse))
+		console.log("functionReturn")
+		console.log(JSON.stringify(functionReturn))
 
-			
-			dataChannel.send(JSON.stringify(functionReturn));
-			dataChannel.send(JSON.stringify(messageResponse));
+		console.log("messageResponse")
+		console.log(JSON.stringify(messageResponse))
 
-			dataChannel.send(
-				JSON.stringify({ type: "response.create" }),
-			);
-		}
+		
+		dataChannel.send(JSON.stringify(functionReturn));
+		dataChannel.send(JSON.stringify(messageResponse));
+
+		dataChannel.send(
+			JSON.stringify({ type: "response.create" }),
+		);
 	}
 });
 
