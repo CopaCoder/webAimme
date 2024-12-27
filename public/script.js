@@ -103,23 +103,266 @@ function configureData() {
 			modalities: ['text', 'audio'],
 			tools: [
 				{
+				
+					type: "function",
+					name: "contact_site_manager",
+					description:
+						"Send a summarised message of the conversation to the site manager of the location",
+					parameters: {
+						type: "object",
+						properties: {
+						summarised_message: {
+							type: "string",
+							description: "A concise summary of the conversation's content and the guest's needs. Include the room number, guest's name, and any other relevant information.",
+						},
+						room_number: {
+							type: "string",
+							description: "The room number that the guest is staying in"
+						},
+						guest_name: {
+							type: "string",
+							description: "The name of the guest staying in the room"
+						},
+						mobile_phone_number: {
+							type: "string",
+							description: "The mobile phone number of the user"
+						}
+						},
+						additionalProperties: false,
+						required: [
+								"summarised_message",
+								"room_number",
+								"guest_name",
+								"mobile_phone_number"]
+						}
+					},
+					{
+					type: "function",
+					name: "send_location",
+					description:
+						"Text message the location of the motel shop to the user.",
+					parameters: {
+						type: "object",
+						properties: {
+						mobile_phone_number: {
+							type: "string",
+							description: "The mobile phone number of the user"
+						}
+						},
+						additionalProperties: false,
+						required: ["mobile_phone_number"]
+					}
+					},
+					{
 					type: "function",
 					name: "find_something",
 					description: "Help the guest find something in the hotel room",
 					parameters: {
-					  type: "object",
-					  properties: {
+						type: "object",
+						properties: {
 						object: {
-						  type: "string",
-						  description: "What the guest is looking for, e.g. hairdryer, coffee machine, blanket"
+							type: "string",
+							description: "What the guest is looking for, e.g. hairdryer, coffee machine, blanket"
 						},
 						room_number: {
-						  type: "string",
-						  description: "The room number that the guest is staying in"
+							type: "string",
+							description: "The room number that the guest is staying in"
 						}
-					  },
-					  additionalProperties: false,
-					  required: ["object", "room_number"]
+						},
+						additionalProperties: false,
+						required: ["object", "room_number"]
+					}
+					},
+					{
+					type: "function",
+					name: "contact_reservation_manager",
+					description: "Send a summarised message of the conversation and what the caller wants to the reservation manager who can help the caller",
+					parameters: {
+						type: "object",
+						properties: {
+						name: {
+							type: "string",
+							description: "Name of the person to contact"
+						},
+						phone_number: {
+							type: "string",
+							description: "Phone Number of the person to contact"
+						},
+						email: {
+							type: "string",
+							description: "Email of the person to contact"
+						},
+						summarised_message: {
+							type: "string",
+							description: "summarised message of this conversation"
+						}
+						},
+						additionalProperties: false,
+						required: [
+						"name",
+						"phone_number",
+						"email",
+						"summarised_message"
+						]
+					}
+					},
+					{
+					type: "function",
+					name: "find_guest_in_booking_system",
+					description: "Locate the guest in the booking system.",
+					parameters: {
+						type: "object",
+						required: [
+						"first_name",
+						"last_name"
+						],
+						properties: {
+						first_name: {
+							"type": "string",
+							"description": "The first name of the guest."
+						},
+						last_name: {
+							"type": "string",
+							"description": "The last name of the guest."
+						}
+						},
+						additionalProperties: false
+					}
+					},
+					{
+					type: "function",
+					name: "find_reservation",
+					description: "Find the reservation in the booking system.",
+					parameters: {
+						type: "object",
+						required: [
+						"guestID"
+						],
+						properties: {
+						guestID: {
+							type: "string",
+							description: "The guestID used to locate the associated reservations."
+						}
+						},
+						additionalProperties: false
+					}
+					},
+					{
+					type: "function",
+					name: "add_guest_credentials",
+					description: "Adds the guest passport or license number to their profile",
+					parameters: {
+						type: "object",  
+						required: [
+						"guestID"
+						],
+						properties: {
+						drivers_licence_number: {
+							type: "string",
+							description: "The number on their drivers licence."
+						},
+						passport_number: {
+							type: "string",
+							description: "The number listed on their passport"
+						},
+						guestID: {
+							type: "string",
+							description: "The guestID"
+						}
+						},
+						additionalProperties: false
+					}
+					},
+					{
+					type: "function",
+					name: "find_credit_card_on_profile",
+					description: "Look up the customer in the booking system to see if they have a credit card on their profile",
+					parameters: {
+						type: "object",  
+						required: [
+						"guestID"
+						],
+						properties: {
+						guestID: {
+							type: "string",
+							description: "The guestID"
+						}
+						},
+						additionalProperties: false
+					}
+					},
+					{
+					type: "function",
+					name: "add_credit_card_to_profile",
+					description: "Adds a credit card to the guest profile",
+					parameters: {
+						type: "object",  
+						required: [
+						"guestID"
+						],
+						properties: {
+						guestID: {
+							type: "string",
+							description: "The guestID"
+						},
+						name_on_card: {
+							type: "string",
+							description: "The name on the credit card "
+						},
+						card_number: {
+							type: "string",
+							description: "The credit card number"
+						},
+						expiry_date: {
+							type: "string",
+							description: "The credit card expiry date"
+						},
+						reservationID: {
+							type: "string",
+							description: "The reservationID"
+						},
+						depositAmount: {
+							type: "string",
+							description: "The deposit amount which will be held on the card."
+						}
+						},
+						additionalProperties: false
+					}
+					},
+					{
+					type: "function",
+					name: "start_reservation",
+					description: "Start the reservation by setting the status to Checked in on the booking system.",
+					parameters: {
+						type: "object",  
+						required: [
+						"reservationID"
+						],
+						properties: {
+						reservationID: {
+							type: "string",
+							description: "The reservationID"
+						}
+						},
+						additionalProperties: false
+					}
+					},
+					{
+					type: "function",
+					name: "get_room_details",
+					description: "Get the details of the room the guest is checked into.",
+					parameters: {
+						type: "object",  
+						required: [
+						"resourceID"
+						],
+						properties: {
+							resourceID: {
+							type: "string",
+							description: "The reservationID also returned as known as AssignedResourceId"
+						}
+						},
+						additionalProperties: false
 					}
 				},
 			],
