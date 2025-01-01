@@ -510,8 +510,8 @@ function disconnect() {
 		peerConnection = null;
 		console.log('WebRTC connection stopped');
 	}
-	document.querySelector('.control.start').style.display = 'block'; 
-	document.querySelector('.control.stop').style.display = 'none'; 
+	document.querySelector('.start-container').style.display = 'block'; 
+	document.querySelector('.calling-container').style.display = 'none'; 
 
 
 }
@@ -541,8 +541,8 @@ function startCall() {
 		//ssource.connect(audioContext.destination); // Connect to speakers
 
 
-		document.querySelector('.control.start').style.display = 'none'; 
-		document.querySelector('.control.stop').style.display = 'block'; 
+		document.querySelector('.start-container').style.display = 'none'; 
+		document.querySelector('.calling-container').style.display = 'block'; 
 
 		// Play a sound (for example, a beep)
 		const beep = new Audio('beep.mp3'); // Replace with your audio file path

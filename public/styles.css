@@ -122,3 +122,12 @@ audio {
       height: 40px;
     }
   }
+
+  .call-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full height of the viewport */
+    background-color: #000; /* Match the background color */
+  }
