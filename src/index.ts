@@ -6,6 +6,8 @@ const DEFAULT_INSTRUCTIONS = `You are a hotel concierge working for Shores Motel
 
 For all tasks whenever you get a last name, phone number or email address from the guest make sure you read it back to the guest afterwards and ask them if it’s correct
 
+When you detect that the conversation has ended double check there is nothing else you can help the guest with. If there is nothing further you can assist them with say a friendly goodbye. Once you hear them say goodbye back then call the hang_up function. 
+
 If they are asking about room service, direct them to Uber Eats. 
 
 Checkout is 10am
@@ -135,12 +137,19 @@ If a someone wants to book a room;
 
 Today's date is ` + new Date().toLocaleString() ;
 
+function generateSessionId(): string {
+	const timestamp = Date.now(); // Get the current timestamp
+	const randomNum = Math.floor(Math.random() * 10000); // Generate a random number
+	return `session_${timestamp}_${randomNum}`; // Combine them to create a unique ID
+}
+
 app.post('/rtc-connect', async (c) => {
 	const body = await c.req.text();
 	const url = new URL('https://api.openai.com/v1/realtime');
 	url.searchParams.set('model', 'gpt-4o-realtime-preview-2024-12-17');
 	url.searchParams.set('instructions', DEFAULT_INSTRUCTIONS);
 	url.searchParams.set('voice', 'shimmer');
+	url.searchParams.set('session_id', generateSessionId());
 
 	const response = await fetch(url.toString(), {
 		method: 'POST',

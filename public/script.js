@@ -3,54 +3,11 @@ const MAKE_WEBHOOK_URL = "https://hook.eu2.make.com/wy955rlqwqpnj39e5nib8bo0hixq
 let audioContext;
 let analyser;
 let dataArray;
+var transcript = '';
+var location = 'Miami';
+var roomNumber = '402';
 
-// Function to initialize WebRTC and audio processing
-async function initWebRTC() {
-    const peerConnection = new RTCPeerConnection();
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
 
-    // Create an audio context and analyser
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
-
-    const source = audioContext.createMediaStreamSource(stream);
-    source.connect(analyser);
-
-    dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-    // Start monitoring voice activity
-    monitorVoiceActivity();
-}
-
-// Function to monitor voice activity
-function monitorVoiceActivity() {
-    const voiceIndicator = document.getElementById('voiceIndicator');
-
-    function checkVoiceActivity() {
-        analyser.getByteFrequencyData(dataArray); // Get frequency data
-
-        // Calculate the average volume
-        const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
-
-        // Update the voice indicator based on the average volume
-        if (average > 50) { // Adjust threshold as needed
-            voiceIndicator.style.backgroundColor = 'green'; // Active
-        } else {
-            voiceIndicator.style.backgroundColor = 'gray'; // Inactive
-        }
-
-        requestAnimationFrame(checkVoiceActivity); // Continue checking
-    }
-
-    checkVoiceActivity(); // Start the loop
-}
-
-// Call initWebRTC when the document is ready
-document.addEventListener('DOMContentLoaded', () => {
-    initWebRTC(); // Initialize WebRTC and audio processing
-});
 
 async function sendToWebhook(payload) {
     console.log("Sending data to webhook:", JSON.stringify(payload, null, 2)); // Log the data being sent
@@ -81,26 +38,13 @@ async function sendToWebhook(payload) {
     }
 }
 
-
-// Create a WebRTC Agent
-const peerConnection = new RTCPeerConnection();
-
-// On inbound audio add to page
-peerConnection.ontrack = (event) => {
-	const el = document.createElement('audio');
-	el.srcObject = event.streams[0];
-	el.autoplay = el.controls = true;
-	document.body.appendChild(el);
-};
-
-const dataChannel = peerConnection.createDataChannel('response');
-
 function configureData() {
 	console.log('Configuring data channel');
 	const event = {
 		type: 'session.update',
 		session: {
 			modalities: ['text', 'audio'],
+			input_audio_transcription: {model: "whisper-1"},
 			tools: [
 				{
 				
@@ -364,16 +308,66 @@ function configureData() {
 						},
 						additionalProperties: false
 					}
-				},
+					},
+					{
+					type: "function",
+					name: "hang_up",
+					description: "Stop the conversation",
+					parameters: {
+						type: "object",
+						properties: {},
+						required: []
+					}
+					},
 			],
 		},
 	};
 	dataChannel.send(JSON.stringify(event));
 }
 
+var peerConnection;
+var dataChannel;
+
+function initConnection() {
+
+
+
+
+// Create a WebRTC Agent
+peerConnection = new RTCPeerConnection();
+
+// On inbound audio add to page
+peerConnection.ontrack = (event) => {
+	const el = document.createElement('audio');
+	el.srcObject = event.streams[0];
+	el.autoplay = el.controls = true;
+	document.body.appendChild(el);
+};
+
+dataChannel = peerConnection.createDataChannel('response');
+
+
 dataChannel.addEventListener('open', (ev) => {
 	console.log('Opening data channel', ev);
 	configureData();
+
+	const introMessage = {
+		type: "conversation.item.create",
+		item: {
+			type: "message",
+			role: "system",
+			content: [
+				{
+					type: "input_text",
+					text: `The guest is calling from room ${roomNumber}. Introduce yourself to the guest and ask who are you speaking with and how you can help. Give them all the time they need.`,
+				},
+			],
+		},
+	};
+
+	dataChannel.send(JSON.stringify(introMessage));
+	dataChannel.send(JSON.stringify({ type: "response.create" }));
+
 });
 
 // {
@@ -391,6 +385,12 @@ dataChannel.addEventListener('message', async (ev) => {
 	const msg = JSON.parse(ev.data);
 	// Handle function calls
 	if (msg.type === 'response.function_call_arguments.done') {
+		if (msg.name === 'hang_up')
+		{
+			ai_hang_up();
+			return;
+		}
+
 		console.log(`Calling function ${msg.name} with ${msg.arguments}`);
 		const args = JSON.parse(msg.arguments);
 
@@ -445,31 +445,153 @@ dataChannel.addEventListener('message', async (ev) => {
 			JSON.stringify({ type: "response.create" }),
 		);
 	}
+
+	//console.log(`msg: ${ev.data}`)
+
+	// Log agent response
+	if (msg.type === "response.done") {
+
+		//console.log(`msg: ${ev.data}`)
+
+		const agentMessage =
+			msg.response.output[0]?.content?.find(
+				(content) => content.transcript,
+			)?.transcript || "Agent message not found";
+		transcript += `Agent: ${agentMessage}\n`; // Add agent's message to the transcript
+		console.log(`Agent: ${agentMessage}`);
+		
+	}
+
+	
+	//Log user transcription (input_audio_transcription.completed)
+	if (
+		msg.type ===
+			"conversation.item.input_audio_transcription.completed" &&
+		msg.transcript
+	) {
+		//console.log(`msg: ${ev.data}`)
+
+		const userMessage = msg.transcript.trim(); // Get the user's transcribed message
+		transcript += `User: ${userMessage}\n`; // Add the user's message to the transcript
+		console.log(`User: ${userMessage}`);
+	}
 });
 
-// Capture microphone
-navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-	// Add microphone to PeerConnection
-	stream.getTracks().forEach((track) => peerConnection.addTransceiver(track, { direction: 'sendrecv' }));
+}
 
-	peerConnection.createOffer().then((offer) => {
-		peerConnection.setLocalDescription(offer);
+initConnection();
 
-		// Send WebRTC Offer to Workers Realtime WebRTC API Relay
-		fetch('/rtc-connect', {
-			method: 'POST',
-			body: offer.sdp,
-			headers: {
-				'Content-Type': 'application/sdp',
-			},
-		})
-			.then((r) => r.text())
-			.then((answer) => {
-				// Accept answer from Realtime WebRTC API
-				peerConnection.setRemoteDescription({
-					sdp: answer,
-					type: 'answer',
-				});
-			});
+function ai_hang_up() {
+	console.log('AI Hang up.');
+	logCall();
+
+	//Wait for the AI to finish it's sentence.
+	setTimeout(() => {
+		disconnect();
+	}, 5000);
+
+}
+
+function user_hang_up() {
+	console.log('User Hang up.');
+	logCall();
+	disconnect();
+	//Can do the beep sound because it's user initiated
+	const beep = new Audio('endbeep.mp3'); 
+	beep.play();
+}
+
+// Function to stop the WebRTC connection
+function disconnect() {
+	console.log('Disconnect');
+	//peerConnection.getTracks().forEach(track => track.stop()); // Stop all tracks
+	if (peerConnection) {
+		peerConnection.close(); // Close the peer connection
+		peerConnection = null;
+		console.log('WebRTC connection stopped');
+	}
+	document.querySelector('.control.start').style.display = 'block'; 
+	document.querySelector('.control.stop').style.display = 'none'; 
+
+
+}
+
+function logCall() {
+	sendToWebhook({
+		route: "2", // Route 2 for sending the transcript
+		data1: roomNumber,
+		data2: transcript, // Send the transcript to the webhook
 	});
+	transcript = "";
+}
+
+function startCall() {
+
+	if (peerConnection === null) {
+		initConnection();
+	}
+
+	// Capture microphone
+	navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+		
+		//const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+			// Create a media stream source from the microphone
+		//const source = audioContext.createMediaStreamSource(stream);
+		//ssource.connect(audioContext.destination); // Connect to speakers
+
+
+		document.querySelector('.control.start').style.display = 'none'; 
+		document.querySelector('.control.stop').style.display = 'block'; 
+
+		// Play a sound (for example, a beep)
+		const beep = new Audio('beep.mp3'); // Replace with your audio file path
+		beep.play();
+
+		
+
+		setTimeout(() => {
+			console.log('Ring finished.')
+			beep.pause(); // Pause the audio
+			//beep.currentTime = 0;
+
+			// Add microphone to PeerConnection
+			stream.getTracks().forEach((track) => peerConnection.addTransceiver(track, { direction: 'sendrecv' }));
+
+			peerConnection.createOffer().then((offer) => {
+				peerConnection.setLocalDescription(offer);
+
+				// Send WebRTC Offer to Workers Realtime WebRTC API Relay
+				fetch('/rtc-connect', {
+					method: 'POST',
+					body: offer.sdp,
+					headers: {
+						'Content-Type': 'application/sdp',
+					},
+				})
+					.then((r) => r.text())
+					.then((answer) => {
+						// Accept answer from Realtime WebRTC API
+						peerConnection.setRemoteDescription({
+							sdp: answer,
+							type: 'answer',
+						});
+					});
+			});
+		}, 4000);
+	});
+}
+
+
+// Add event listener to the stop button
+document.querySelector('.control.stop').addEventListener('click', () => {
+	user_hang_up(); // Call the function to stop the WebRTC connection
 });
+
+
+document.querySelector('.control.start').addEventListener('click', () => {
+	startCall(); // Call the function to stop the WebRTC connection
+});
+
+
+//Start the page load executionm
