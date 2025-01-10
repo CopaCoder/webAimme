@@ -1,40 +1,53 @@
 <!--  https://www.yeschat.ai/gpts-ZxX5OUbI-Image-to-Code-GPT */ -->
 <!-- https://jsfiddle.net/ -->
 
+ <!-- have a switch in this page to direct to phillipines call line -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 	<title>Shiela from The Shores</title>
 	<link rel="stylesheet" href="/styles.css">
 	<script src="/script.js" type="module"></script>
 	<style>
-    </style>
+    html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden; /* Prevent scrolling */
+    }
+</style>
 </head>
 <body>
-	<div class="start-container">
-	  <div class="status-bar">
-  
-		<div class="info-icon"></div>
-	  </div>
-	  
-	  <p class="text">Miami Shores Concierge</p>
-	  <button class="control start control-button">Call</button>
-	  
-	</div>
+	<div class="responsive-background">
 
-	<div class="calling-container" style="display: none;">
-		<div class="status-bar">
-			<div class="info-icon">
-				<span class="status-dot"></span>
-			</div>
-			<p class="text">Calling Shores Concierge...</p>
+		<!-- ... existing code ... -->
+		<div class="lightbox">
+			<p id="call-title" class="text bold-text"></p>
+			<p id="call-subtitle" class="text"></p>
 		</div>
-		<button class="control stop control-button">End</button>
+<!-- ... existing code ... -->
+		
+		<div class="start-container bottom-container">
+			<button class="control start control-button">
+			<img src="phone.png" alt="Phone Icon" class="phone-icon" />
+			</button>
+		</div>
+
+		<div class="calling-container bottom-container" style="display: none;">
+			<button class="control stop control-button">
+				<img src="phone-hang.png" alt="Phone Icon" class="phone-icon" />
+			</button>
+		</div>
+
+		
+
+
 	</div>
 	
-  </body>
-<body>
+	
+</body>
+
 	
 </html>

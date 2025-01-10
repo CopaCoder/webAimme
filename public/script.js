@@ -1,13 +1,35 @@
-const MAKE_WEBHOOK_URL = "https://hook.eu2.make.com/wy955rlqwqpnj39e5nib8bo0hixquwoa"; 
-
 let audioContext;
 let analyser;
 let dataArray;
 var transcript = '';
-var location = 'Miami';
-var roomNumber = '402';
+var roomNumber;
+let callStartTime;
+let timerInterval;
+let aiHangUp = false;
+let wakeLock = null;
+let organisation;
+let site;
+var peerConnection;
+var dataChannel;
+var siteInstructions = "";
+let microphoneStream;
+let ring; // Declare the beep variable globally
+let ringInterval; // Variable to hold the interval
+let isOutToLunch = false;
+let personaName;
+let personaTitle;
+let rings = 0;
+let aiHasHungUp;
+const maxRings = 5;
+const urlParams = new URLSearchParams(window.location.search);
 
+organisation = urlParams.get('o') || "SHORES";
+site = urlParams.get('s') || "Surfers";
+roomNumber = urlParams.get('r') || "";
+personaName = urlParams.get('n') || "Sheila";
+personaTitle = urlParams.get('t') || "The Shores Concierge";
 
+const MAKE_WEBHOOK_URL = "https://hook.eu2.make.com/wy955rlqwqpnj39e5nib8bo0hixquwoa?site=" + site + "&organisation=" + organisation; 
 
 async function sendToWebhook(payload) {
     console.log("Sending data to webhook:", JSON.stringify(payload, null, 2)); // Log the data being sent
@@ -84,7 +106,7 @@ function configureData() {
 					type: "function",
 					name: "send_location",
 					description:
-						"Text message the location of the motel shop to the user.",
+						"Text message the location of the site to the user.",
 					parameters: {
 						type: "object",
 						properties: {
@@ -95,26 +117,6 @@ function configureData() {
 						},
 						additionalProperties: false,
 						required: ["mobile_phone_number"]
-					}
-					},
-					{
-					type: "function",
-					name: "find_something",
-					description: "Help the guest find something in the hotel room",
-					parameters: {
-						type: "object",
-						properties: {
-						object: {
-							type: "string",
-							description: "What the guest is looking for, e.g. hairdryer, coffee machine, blanket"
-						},
-						room_number: {
-							type: "string",
-							description: "The room number that the guest is staying in"
-						}
-						},
-						additionalProperties: false,
-						required: ["object", "room_number"]
 					}
 					},
 					{
@@ -132,10 +134,6 @@ function configureData() {
 							type: "string",
 							description: "Phone Number of the person to contact"
 						},
-						email: {
-							type: "string",
-							description: "Email of the person to contact"
-						},
 						summarised_message: {
 							type: "string",
 							description: "summarised message of this conversation"
@@ -145,168 +143,8 @@ function configureData() {
 						required: [
 						"name",
 						"phone_number",
-						"email",
 						"summarised_message"
 						]
-					}
-					},
-					{
-					type: "function",
-					name: "find_guest_in_booking_system",
-					description: "Locate the guest in the booking system.",
-					parameters: {
-						type: "object",
-						required: [
-						"first_name",
-						"last_name"
-						],
-						properties: {
-						first_name: {
-							"type": "string",
-							"description": "The first name of the guest."
-						},
-						last_name: {
-							"type": "string",
-							"description": "The last name of the guest."
-						}
-						},
-						additionalProperties: false
-					}
-					},
-					{
-					type: "function",
-					name: "find_reservation",
-					description: "Find the reservation in the booking system.",
-					parameters: {
-						type: "object",
-						required: [
-						"guestID"
-						],
-						properties: {
-						guestID: {
-							type: "string",
-							description: "The guestID used to locate the associated reservations."
-						}
-						},
-						additionalProperties: false
-					}
-					},
-					{
-					type: "function",
-					name: "add_guest_credentials",
-					description: "Adds the guest passport or license number to their profile",
-					parameters: {
-						type: "object",  
-						required: [
-						"guestID"
-						],
-						properties: {
-						drivers_licence_number: {
-							type: "string",
-							description: "The number on their drivers licence."
-						},
-						passport_number: {
-							type: "string",
-							description: "The number listed on their passport"
-						},
-						guestID: {
-							type: "string",
-							description: "The guestID"
-						}
-						},
-						additionalProperties: false
-					}
-					},
-					{
-					type: "function",
-					name: "find_credit_card_on_profile",
-					description: "Look up the customer in the booking system to see if they have a credit card on their profile",
-					parameters: {
-						type: "object",  
-						required: [
-						"guestID"
-						],
-						properties: {
-						guestID: {
-							type: "string",
-							description: "The guestID"
-						}
-						},
-						additionalProperties: false
-					}
-					},
-					{
-					type: "function",
-					name: "add_credit_card_to_profile",
-					description: "Adds a credit card to the guest profile",
-					parameters: {
-						type: "object",  
-						required: [
-						"guestID"
-						],
-						properties: {
-						guestID: {
-							type: "string",
-							description: "The guestID"
-						},
-						name_on_card: {
-							type: "string",
-							description: "The name on the credit card "
-						},
-						card_number: {
-							type: "string",
-							description: "The credit card number"
-						},
-						expiry_date: {
-							type: "string",
-							description: "The credit card expiry date"
-						},
-						reservationID: {
-							type: "string",
-							description: "The reservationID"
-						},
-						depositAmount: {
-							type: "string",
-							description: "The deposit amount which will be held on the card."
-						}
-						},
-						additionalProperties: false
-					}
-					},
-					{
-					type: "function",
-					name: "start_reservation",
-					description: "Start the reservation by setting the status to Checked in on the booking system.",
-					parameters: {
-						type: "object",  
-						required: [
-						"reservationID"
-						],
-						properties: {
-						reservationID: {
-							type: "string",
-							description: "The reservationID"
-						}
-						},
-						additionalProperties: false
-					}
-					},
-					{
-					type: "function",
-					name: "get_room_details",
-					description: "Get the details of the room the guest is checked into.",
-					parameters: {
-						type: "object",  
-						required: [
-						"resourceID"
-						],
-						properties: {
-							resourceID: {
-							type: "string",
-							description: "The reservationID also returned as known as AssignedResourceId"
-						}
-						},
-						additionalProperties: false
 					}
 					},
 					{
@@ -319,39 +157,259 @@ function configureData() {
 						required: []
 					}
 					},
+					{
+						type: "function",
+						name: "fetch_room",
+						description: "Update the room number into memory when the guest tells you there room number",
+						parameters: {
+							type: "object",
+							properties: {
+							room_number: {
+								type: "string",
+								description: "The room number that the guest is staying in"
+							}
+							},
+							additionalProperties: false,
+							required: ["room_number"]
+						}
+					}
 			],
 		},
 	};
 	dataChannel.send(JSON.stringify(event));
 }
 
-var peerConnection;
-var dataChannel;
+function initSystemInfo() {
 
-function initConnection() {
+	console.log("Initialise system information for site:" + site);
 
+	if (site === null)
+	{
+		console.error("Site is not defined."); // Handle any errors
+		return;
+	}
 
+	//flight mode start
+	// console.log("In flight mode.");
+	// setTimeout(() => {
+	// 	siteInstructions = "Returned";
+	// 	console.log("Site Information: " + siteInstructions);
+	// }, 20000);
+	// return;
+	//flight mode end
 
+	sendToWebhook({
+		route: "0",  
+		data1: "site_information"
+	})
+	.then((webhookResponse) => {
+		const parsedResponse = JSON.parse(webhookResponse);
+		siteInstructions = parsedResponse.organisation_instructions + "\\n\\n" + parsedResponse.site_information + "\\n\\n"
+	})
+	.catch((error) => {
+		console.error("Error sending to webhook:", error); // Handle any errors
+	});
 
-// Create a WebRTC Agent
-peerConnection = new RTCPeerConnection();
+}
 
-// On inbound audio add to page
-peerConnection.ontrack = (event) => {
-	const el = document.createElement('audio');
-	el.srcObject = event.streams[0];
-	el.autoplay = el.controls = true;
-	document.body.appendChild(el);
+window.onload = function() {
+    
+	if (isOutToLunch)
+	{
+		outToLunch()
+		return;
+	}
+
+	initSystemInfo(); 
+	document.getElementById('call-title').textContent = personaName;
+	document.getElementById('call-subtitle').textContent = personaTitle;
+	
+
+	
 };
 
-dataChannel = peerConnection.createDataChannel('response');
+
+function outToLunch() {
+
+	document.getElementById('call-subtitle').textContent = `Sorry, I'm out to lunch`;
+	document.querySelector('.start-container').style.display = 'none'; 
+	document.querySelector('.calling-container').style.display = 'none'; 
+	
+	
+	
+	
+}
 
 
-dataChannel.addEventListener('open', (ev) => {
-	console.log('Opening data channel', ev);
-	configureData();
+function initRTCConnection() {
 
-	const introMessage = {
+	// Create a WebRTC Agent
+	peerConnection = new RTCPeerConnection();
+
+	// On inbound audio add to page
+	peerConnection.ontrack = (event) => {
+		const el = document.createElement('audio');
+		el.srcObject = event.streams[0];
+		el.autoplay = el.controls = true;
+		document.body.appendChild(el);
+	};
+
+	dataChannel = peerConnection.createDataChannel('response');
+
+
+	dataChannel.addEventListener('open', (ev) => {
+		console.log('Opening data channel', ev);
+		configureData();
+
+		// const introMessage = {
+		// 	type: "conversation.item.create",
+		// 	item: {
+		// 		type: "message",
+		// 		role: "system",
+		// 		content: [
+		// 			{
+		// 				type: "input_text",
+		// 				text: siteInformation //`Say Hi!`//,Introduce yourself to the guest. Ask for their name and their room number. Then call the fetch_room function.`,
+		// 			},
+		// 		],
+		// 	},
+		// };
+
+		//dataChannel.send(JSON.stringify(introMessage));
+
+		// setTimeout(() => {
+		// 	dataChannel.send(JSON.stringify({ type: "response.create" }));
+		// }, 1000); 
+
+	});
+
+	// {
+	//     "type": "response.function_call_arguments.done",
+	//     "event_id": "event_Ad2gt864G595umbCs2aF9",
+	//     "response_id": "resp_Ad2griUWUjsyeLyAVtTtt",
+	//     "item_id": "item_Ad2gsxA84w9GgEvFwW1Ex",
+	//     "output_index": 1,
+	//     "call_id": "call_PG12S5ER7l7HrvZz",
+	//     "name": "get_weather",
+	//     "arguments": "{\"location\":\"Portland, Oregon\"}"
+	// }
+
+	dataChannel.addEventListener('message', async (ev) => {
+		const msg = JSON.parse(ev.data);
+
+		if (msg.type === 'response.function_call_arguments.done') {
+			console.log(`Calling function ${msg.name} with ${msg.arguments}`);
+			const args = JSON.parse(msg.arguments);
+
+			if (msg.name === 'hang_up')
+			{
+				AIHangsUp();
+				return;
+			} else if (msg.name === 'fetch_room')
+			{				
+				loadRoom(args.room_number);
+				return;
+			}
+			
+
+			const webhookResponse = await sendToWebhook({
+				route: "5",  
+				data1: msg.name,
+				data2: JSON.stringify(args),
+				sessionID: 'sessionId'
+				});
+
+			console.log(webhookResponse);
+			// Parse the webhook response
+			const parsedResponse = JSON.parse(webhookResponse);
+
+			
+
+			const functionReturn = {
+				type: "conversation.item.create",
+				item: {
+					call_id: msg.call_id,
+					type: "function_call_output",
+					role: "system",
+					output: JSON.stringify(parsedResponse.values),  
+				}
+			};
+
+			const messageResponse = {
+				type: "conversation.item.create",
+				item: {
+					type: "message",
+					role: "user",
+					content: [
+						{
+							type: "input_text",
+							text: JSON.stringify(parsedResponse.instructions),
+						},
+					],
+				},
+			};
+
+			console.log("functionReturn")
+			console.log(JSON.stringify(functionReturn))
+
+			console.log("messageResponse")
+			console.log(JSON.stringify(messageResponse))
+
+			
+			dataChannel.send(JSON.stringify(functionReturn));
+			dataChannel.send(JSON.stringify(messageResponse));
+
+			dataChannel.send(
+				JSON.stringify({ type: "response.create" }),
+			);
+		}
+
+		//console.log(`msg: ${ev.data}`)
+
+		// Log agent response
+		if (msg.type === "response.done") {
+
+			//console.log(`msg: ${ev.data}`)
+
+			const agentMessage =
+				msg.response.output[0]?.content?.find(
+					(content) => content.transcript,
+				)?.transcript || "Agent message not found";
+			transcript += `Agent: ${agentMessage}\n`; // Add agent's message to the transcript
+			console.log(`Agent: ${agentMessage}`);
+			document.getElementById('call-title').textContent = personaName;
+
+
+			
+		}
+
+		
+		//Log user transcription (input_audio_transcription.completed)
+		if (
+			msg.type ===
+				"conversation.item.input_audio_transcription.completed" &&
+			msg.transcript
+		) {
+			//console.log(`msg: ${ev.data}`)
+
+			const userMessage = msg.transcript.trim(); // Get the user's transcribed message
+			transcript += `User: ${userMessage}\n`; // Add the user's message to the transcript
+			console.log(`User: ${userMessage}`);
+		}
+	});
+
+}
+
+
+async function loadRoom(updatedRoom) {
+
+	console.log("Loading room...", updatedRoom);
+
+	if (roomNumber === updatedRoom) return;
+
+	roomNumber = updatedRoom;
+
+	const holdMessage = {
 		type: "conversation.item.create",
 		item: {
 			type: "message",
@@ -359,144 +417,95 @@ dataChannel.addEventListener('open', (ev) => {
 			content: [
 				{
 					type: "input_text",
-					text: `The guest is calling from room ${roomNumber}. Introduce yourself to the guest and ask who are you speaking with and how you can help. Give them all the time they need.`,
+					text: "Say Thanks one moment please. And wait for your next system instruction.",
 				},
 			],
 		},
 	};
 
-	dataChannel.send(JSON.stringify(introMessage));
-	dataChannel.send(JSON.stringify({ type: "response.create" }));
-
-});
-
-// {
-//     "type": "response.function_call_arguments.done",
-//     "event_id": "event_Ad2gt864G595umbCs2aF9",
-//     "response_id": "resp_Ad2griUWUjsyeLyAVtTtt",
-//     "item_id": "item_Ad2gsxA84w9GgEvFwW1Ex",
-//     "output_index": 1,
-//     "call_id": "call_PG12S5ER7l7HrvZz",
-//     "name": "get_weather",
-//     "arguments": "{\"location\":\"Portland, Oregon\"}"
-// }
-
-dataChannel.addEventListener('message', async (ev) => {
-	const msg = JSON.parse(ev.data);
-	// Handle function calls
-	if (msg.type === 'response.function_call_arguments.done') {
-		if (msg.name === 'hang_up')
-		{
-			ai_hang_up();
-			return;
-		}
-
-		console.log(`Calling function ${msg.name} with ${msg.arguments}`);
-		const args = JSON.parse(msg.arguments);
-
-		const webhookResponse = await sendToWebhook({
-			route: "5",  
-			data1: msg.name,
-			data2: JSON.stringify(args),
-			sessionID: 'sessionId'
-			});
-
-		console.log(webhookResponse);
-		// Parse the webhook response
-		const parsedResponse = JSON.parse(webhookResponse);
-
-		
-
-		const functionReturn = {
-			type: "conversation.item.create",
-			item: {
-				call_id: msg.call_id,
-				type: "function_call_output",
-				role: "system",
-				output: JSON.stringify(parsedResponse.values),  
-			}
-		};
-
-		const messageResponse = {
-			type: "conversation.item.create",
-			item: {
-				type: "message",
-				role: "user",
-				content: [
-					{
-						type: "input_text",
-						text: JSON.stringify(parsedResponse.instructions),
-					},
-				],
-			},
-		};
-
-		console.log("functionReturn")
-		console.log(JSON.stringify(functionReturn))
-
-		console.log("messageResponse")
-		console.log(JSON.stringify(messageResponse))
-
-		
-		dataChannel.send(JSON.stringify(functionReturn));
-		dataChannel.send(JSON.stringify(messageResponse));
-
-		dataChannel.send(
-			JSON.stringify({ type: "response.create" }),
-		);
-	}
-
-	//console.log(`msg: ${ev.data}`)
-
-	// Log agent response
-	if (msg.type === "response.done") {
-
-		//console.log(`msg: ${ev.data}`)
-
-		const agentMessage =
-			msg.response.output[0]?.content?.find(
-				(content) => content.transcript,
-			)?.transcript || "Agent message not found";
-		transcript += `Agent: ${agentMessage}\n`; // Add agent's message to the transcript
-		console.log(`Agent: ${agentMessage}`);
-		
-	}
+	dataChannel.send(JSON.stringify(holdMessage));
 
 	
-	//Log user transcription (input_audio_transcription.completed)
-	if (
-		msg.type ===
-			"conversation.item.input_audio_transcription.completed" &&
-		msg.transcript
-	) {
-		//console.log(`msg: ${ev.data}`)
+	//dataChannel.send(JSON.stringify({ type: "response.create" }));
+	dataChannel.send(
+		JSON.stringify({ type: "response.create" }),
+	);
 
-		const userMessage = msg.transcript.trim(); // Get the user's transcribed message
-		transcript += `User: ${userMessage}\n`; // Add the user's message to the transcript
-		console.log(`User: ${userMessage}`);
-	}
-});
+	const webhookResponse = await sendToWebhook({
+		route: "5",  
+		data1: "fetch_room_info",
+		data2: JSON.stringify({room_number: updatedRoom})
+		});
+
+	const parsedResponse = JSON.parse(webhookResponse);
+
+	const functionResponse = {
+		type: "conversation.item.create",
+		item: {
+			type: "message",
+			role: "system",
+			content: [
+				{
+					type: "input_text",
+					text: JSON.stringify(parsedResponse.room_information),
+				},
+			],
+		},
+	};
+
+	const instructionMessage = {
+		type: "conversation.item.create",
+		item: {
+			type: "message",
+			role: "system",
+			content: [
+				{
+					type: "input_text",
+					text: "Say I see your staying in our <insert room title> and ask how you can assist them",
+				},
+			],
+		},
+	};
+
+
+
+	dataChannel.send(JSON.stringify(functionResponse));
+	dataChannel.send(JSON.stringify(instructionMessage));
+
+	
+	//dataChannel.send(JSON.stringify({ type: "response.create" }));
+	dataChannel.send(
+		JSON.stringify({ type: "response.create" }),
+	);
+
+	roomNumber = updatedRoom;
+	console.log("Room Number Updated to:", roomNumber);
 
 }
 
-initConnection();
+initRTCConnection();
 
-function ai_hang_up() {
+function AIHangsUp() {
+	if (aiHasHungUp) return
+
 	console.log('AI Hang up.');
-	logCall();
-
-	//Wait for the AI to finish it's sentence.
+	
 	setTimeout(() => {
 		disconnect();
-	}, 5000);
+	}, 7000);
+
+	aiHasHungUp = true;
 
 }
 
-function user_hang_up() {
+function userHangUp() {
 	console.log('User Hang up.');
-	logCall();
 	disconnect();
 	//Can do the beep sound because it's user initiated
+	ring.pause();
+	ring.currentTime = 0; // Reset the beep sound to the beginning
+	clearInterval(ringInterval);
+
 	const beep = new Audio('endbeep.mp3'); 
 	beep.play();
 }
@@ -504,15 +513,19 @@ function user_hang_up() {
 // Function to stop the WebRTC connection
 function disconnect() {
 	console.log('Disconnect');
+	logCall();
+	releaseWakeLock();
+	stopMicrophone()
 	//peerConnection.getTracks().forEach(track => track.stop()); // Stop all tracks
 	if (peerConnection) {
 		peerConnection.close(); // Close the peer connection
 		peerConnection = null;
 		console.log('WebRTC connection stopped');
 	}
+	timerInterval = clearInterval(timerInterval);
 	document.querySelector('.start-container').style.display = 'block'; 
-	document.querySelector('.calling-container').style.display = 'none'; 
-
+	document.querySelector('.calling-container').style.display = 'none'; 	
+	document.getElementById('call-subtitle').textContent = personaTitle;	
 
 }
 
@@ -525,11 +538,75 @@ function logCall() {
 	transcript = "";
 }
 
-function startCall() {
+
+async function ringUntilReady() {
+
+	console.log("Ring until ready...");
+    // Initialize the beep sound
+    ring = new Audio('ring.mp4'); // Replace with your audio file path
+
+    // Play the beep sound initially
+    ring.play();
+
+    // Return a promise that resolves when siteInformation is not null
+    return new Promise((resolve) => {
+
+        // Set an interval to check the siteInformation value
+        ringInterval = setInterval(() => {
+            if (siteInstructions !== "") {
+                // If siteInformation is not null, stop the beep sound and clear the interval
+                ring.pause();
+                ring.currentTime = 0; // Reset the beep sound to the beginning
+                clearInterval(ringInterval); // Clear the interval
+                console.log("Site information is now available.");
+                resolve(); // Resolve the promise
+			}
+			else if (rings >= maxRings) {
+				ring.pause();
+                ring.currentTime = 0; // Reset the beep sound to the beginning
+                clearInterval(ringInterval);
+				console.log("Rang out...")
+				isOutToLunch = true;
+				outToLunch();
+				const beep = new Audio('endbeep.mp3'); 
+				beep.play();
+
+				resolve();
+            } else {
+				console.log("Site information is not available.");
+                // If siteInformation is still null, keep playing the beep sound
+                ring.play();
+				rings += 1;
+            }
+        }, 3000); 
+    });
+}
+
+async function startCall() {
+
+	console.log("Start Call")
+
+	aiHasHungUp = false;
+	requestWakeLock();
+	document.getElementById('call-subtitle').textContent = `Calling...`;
+	document.querySelector('.start-container').style.display = 'none'; 
+	document.querySelector('.calling-container').style.display = 'block'; 
+
+
+	await ringUntilReady();
+
+	if (isOutToLunch){
+		return;
+	}
+
+	console.log("Ready for call!");
+	//return; //flight mode
 
 	if (peerConnection === null) {
-		initConnection();
+		initRTCConnection();
 	}
+
+	
 
 	// Capture microphone
 	navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
@@ -540,19 +617,27 @@ function startCall() {
 		//const source = audioContext.createMediaStreamSource(stream);
 		//ssource.connect(audioContext.destination); // Connect to speakers
 
+		microphoneStream = stream;
 
-		document.querySelector('.start-container').style.display = 'none'; 
-		document.querySelector('.calling-container').style.display = 'block'; 
-
-		// Play a sound (for example, a beep)
-		const beep = new Audio('beep.mp3'); // Replace with your audio file path
-		beep.play();
+	
 
 		
+		// Play a sound (for example, a beep)
+		//const beep = new Audio('ring.mp3'); // Replace with your audio file path
+		//beep.play();
 
-		setTimeout(() => {
-			console.log('Ring finished.')
-			beep.pause(); // Pause the audio
+		
+		
+
+		//setTimeout(() => {
+			
+			// Start the timer
+			callStartTime = Date.now();
+			timerInterval = setInterval(updateTimer, 1000); // Update timer every second
+
+
+			//console.log('Ring finished.')
+			//beep.pause(); // Pause the audio
 			//beep.currentTime = 0;
 
 			// Add microphone to PeerConnection
@@ -560,11 +645,11 @@ function startCall() {
 
 			peerConnection.createOffer().then((offer) => {
 				peerConnection.setLocalDescription(offer);
-
+				
 				// Send WebRTC Offer to Workers Realtime WebRTC API Relay
 				fetch('/rtc-connect', {
 					method: 'POST',
-					body: offer.sdp,
+					body: JSON.stringify({'offer': offer.sdp, instructions: siteInstructions}), 
 					headers: {
 						'Content-Type': 'application/sdp',
 					},
@@ -576,16 +661,54 @@ function startCall() {
 							sdp: answer,
 							type: 'answer',
 						});
+
+						setTimeout(() => {
+							animateCallTitle();
+						}, 1500);
 					});
 			});
-		}, 4000);
+		//}, 4000);
 	});
 }
 
+function updateTimer() {
+	const elapsedTime = Math.floor((Date.now() - callStartTime) / 1000); // Calculate elapsed time in seconds
+	const minutes = String(Math.floor(elapsedTime / 60)).padStart(2, '0'); // Get minutes
+	const seconds = String(elapsedTime % 60).padStart(2, '0'); // Get seconds
+	document.getElementById('call-subtitle').textContent = `${minutes}:${seconds}`; // Update timer display
+
+	//console.log(elapsedTime);
+
+	//Stop the chat after 10 minutes
+	if (elapsedTime > 600) {
+		
+		timerInterval = clearInterval(timerInterval);
+		const endMessage = {
+			type: "conversation.item.create",
+			item: {
+				type: "message",
+				role: "system",
+				content: [
+					{
+						type: "input_text",
+						text: `The call has been going longer than expected. Explain that you have to go now and end the call. Explain they can call back if necessary.`,
+					},
+				],
+			},
+		};
+	
+		dataChannel.send(JSON.stringify(endMessage));
+		dataChannel.send(JSON.stringify({ type: "response.create" }));
+
+		AIHangsUp();
+	}
+
+	
+}
 
 // Add event listener to the stop button
 document.querySelector('.control.stop').addEventListener('click', () => {
-	user_hang_up(); // Call the function to stop the WebRTC connection
+	userHangUp(); // Call the function to stop the WebRTC connection
 });
 
 
@@ -594,4 +717,66 @@ document.querySelector('.control.start').addEventListener('click', () => {
 });
 
 
-//Start the page load executionm
+// Function to request wake lock
+async function requestWakeLock() {
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock is active');
+    } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+    }
+}
+
+// Function to release wake lock
+async function releaseWakeLock() {
+    if (wakeLock !== null) {
+        await wakeLock.release();
+        wakeLock = null;
+        console.log('Wake Lock has been released');
+    }
+}
+
+function openFullscreen() {
+    const elem = document.documentElement; // Get the document element
+    if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+    } else if (elem.mozRequestFullScreen) { // Firefox
+        elem.mozRequestFullScreen();
+    } else if (elem.webkitRequestFullscreen) { // Chrome, Safari, and Opera
+        elem.webkitRequestFullscreen();
+    } else if (elem.msRequestFullscreen) { // IE/Edge
+        elem.msRequestFullscreen();
+    }
+}
+
+function stopMicrophone() {
+    if (microphoneStream) {
+        // Stop all audio tracks
+        microphoneStream.getTracks().forEach(track => {
+            track.stop(); // Stop the track
+        });
+        microphoneStream = null; // Clear the stream reference
+        console.log("Microphone access relinquished.");
+    } else {
+        console.log("No microphone stream to stop.");
+    }
+}
+
+function animateCallTitle() {
+    const callTitleElement = document.getElementById('call-title');
+    
+	document.getElementById('call-title').textContent = "Say Hello!";
+    // Add the animation class
+    callTitleElement.classList.add('flash-bulge');
+
+    // Optionally, remove the class after the animation is done to reset
+    setTimeout(() => {
+        callTitleElement.classList.remove('flash-bulge');
+    }, 3000); // Remove after 3 seconds
+}
+
+// Example usage
+
+
+
+
