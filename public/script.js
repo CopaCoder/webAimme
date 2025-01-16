@@ -147,16 +147,16 @@ function configureData() {
 						]
 					}
 					},
-					{
-					type: "function",
-					name: "hang_up",
-					description: "Stop the conversation",
-					parameters: {
-						type: "object",
-						properties: {},
-						required: []
-					}
-					},
+					// {
+					// type: "function",
+					// name: "hang_up",
+					// description: "Stop the conversation.",
+					// parameters: {
+					// 	type: "object",
+					// 	properties: {},
+					// 	required: []
+					// }
+					// },
 					{
 						type: "function",
 						name: "fetch_room",
@@ -224,8 +224,8 @@ window.onload = function() {
 	document.getElementById('call-title').textContent = personaName;
 	document.getElementById('call-subtitle').textContent = personaTitle;
 	
-
-	
+	// Set the background image based on personaName
+	document.querySelector('.responsive-background').style.backgroundImage = `${personaName}.jpeg`;
 };
 
 
@@ -461,7 +461,7 @@ async function loadRoom(updatedRoom) {
 			content: [
 				{
 					type: "input_text",
-					text: "Say I see your staying in our <insert room title> and ask how you can assist them",
+					text: "Say I see your staying in our <insert room title>. Then ask how is your stay going and what can i doo for you?",
 				},
 			],
 		},
@@ -490,9 +490,12 @@ function AIHangsUp() {
 
 	console.log('AI Hang up.');
 	
+	stopCall();
 	setTimeout(() => {
+		
 		disconnect();
-	}, 7000);
+		
+	}, 15000);
 
 	aiHasHungUp = true;
 
@@ -500,7 +503,8 @@ function AIHangsUp() {
 
 function userHangUp() {
 	console.log('User Hang up.');
-	disconnect();
+
+	
 	//Can do the beep sound because it's user initiated
 	ring.pause();
 	ring.currentTime = 0; // Reset the beep sound to the beginning
@@ -508,20 +512,31 @@ function userHangUp() {
 
 	const beep = new Audio('endbeep.mp3'); 
 	beep.play();
+
+	disconnect();
+	stopCall();
+	
+
 }
+
+
 
 // Function to stop the WebRTC connection
 function disconnect() {
-	console.log('Disconnect');
-	logCall();
-	releaseWakeLock();
-	stopMicrophone()
-	//peerConnection.getTracks().forEach(track => track.stop()); // Stop all tracks
+
 	if (peerConnection) {
 		peerConnection.close(); // Close the peer connection
 		peerConnection = null;
 		console.log('WebRTC connection stopped');
 	}
+}
+
+function stopCall() {
+	
+	logCall();
+	releaseWakeLock();
+	stopMicrophone()
+	
 	timerInterval = clearInterval(timerInterval);
 	document.querySelector('.start-container').style.display = 'block'; 
 	document.querySelector('.calling-container').style.display = 'none'; 	
@@ -578,7 +593,7 @@ async function ringUntilReady() {
                 ring.play();
 				rings += 1;
             }
-        }, 3000); 
+        }, 2000); 
     });
 }
 
